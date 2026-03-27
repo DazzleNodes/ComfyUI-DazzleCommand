@@ -1,0 +1,32 @@
+[project]
+name = "comfyui-dazzle-command"
+description = "Workflow orchestration node for ComfyUI -- coordinate seed control and execution gates from a single toggle. Part of the DazzleNodes collection."
+version = "0.1.0"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+# No pip dependencies - all dependencies provided by ComfyUI
+dependencies = []
+
+# Optional development dependencies
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/DazzleNodes/ComfyUI-DazzleCommand"
+Issues = "https://github.com/DazzleNodes/ComfyUI-DazzleCommand/issues"
+Changelog = "https://github.com/DazzleNodes/ComfyUI-DazzleCommand/releases"
+Documentation = "https://github.com/DazzleNodes/ComfyUI-DazzleCommand#readme"
+
+# ComfyUI Registry Configuration
+# See: https://docs.comfy.org/registry/publishing
+[tool.comfy]
+PublisherId = "djdarcy"
+DisplayName = "Dazzle Command (DazzleNodes)"
+Icon = ""
+
+# Publishing: Update version in this file and push to main branch
+# GitHub Actions will automatically publish to ComfyUI Registry
