@@ -1,144 +1,170 @@
 """
-Dazzle Command — Workflow orchestration node.
+Dazzle Command -- Workflow orchestration node.
 
 Outputs a DAZZLE_SIGNAL dict that coordinates seed control (SmartResCalc)
 and execution gates (Preview Bridge Extended) from a single toggle.
 
-Signal protocol (schema_version 1):
-{
-    "state": "reviewing" | "proceeding",
-    "seed_intent": "random" | "lock" | "lock_current" | None,
-    "gate_intent": "open" | "block" | None,
-    "gate_mode": "never" | "auto" | "always" | "if_empty_mask" | "if_empty_editor",
-    "schema_version": 1,
-}
+Architecture:
+- The play/pause STATE is NOT a ComfyUI input (would cause cache cascade)
+- State lives in JS widget, communicated via sys._dazzle_command_state
+- IS_CHANGED writes state to sys (runs before any execute)
+- The signal dict is STATIC (contains both play and pause configs)
+- Receivers read active state from sys, pick the right config from signal
 """
 
 import logging
+import sys
 
 logger = logging.getLogger("DazzleCommand")
 
 
-# Seed intent mappings
-SEED_INTENTS = {
+# Seed intent mappings (display label -> signal value)
+SEED_OPTIONS = {
     "random": "random",
     "lock last seed": "lock",
     "lock current": "lock_current",
     "no override": None,
 }
 
-# Gate intent mappings for review mode
-REVIEW_GATE_MODES = {
+# Gate mode mappings for pause state
+PAUSE_GATE_OPTIONS = {
     "auto": "auto",
     "always block": "always",
     "block if empty mask": "if_empty_mask",
     "block if empty editor": "if_empty_editor",
 }
 
-# Gate intent mappings for proceed mode
-PROCEED_GATE_MODES = {
-    "unblock (never)": "never",
+# Gate mode mappings for play state
+PLAY_GATE_OPTIONS = {
+    "never block": "never",
     "auto": "auto",
 }
 
 
+def get_last_seed():
+    """Read the last seed reported by any signal consumer."""
+    registry = getattr(sys, '_dazzle_seed_registry', None)
+    if registry:
+        return registry.get('last')
+    return None
+
+
 class DazzleCommandNode:
     """
-    Workflow orchestration node — single toggle to coordinate
+    Workflow orchestration node -- play/pause toggle coordinates
     seed control and execution gates across multiple nodes.
-
-    Outputs a DAZZLE_SIGNAL dict that receiving nodes interpret
-    based on their own capabilities.
     """
 
     CATEGORY = "DazzleNodes/Control"
     RETURN_TYPES = ("DAZZLE_SIGNAL",)
     RETURN_NAMES = ("signal",)
     FUNCTION = "execute"
-    OUTPUT_NODE = False
+    OUTPUT_NODE = True
 
     @classmethod
     def INPUT_TYPES(cls):
+        # NOTE: "state" is intentionally NOT here. It's a JS-only widget
+        # communicated via sys._dazzle_command_state. Including it as an
+        # input would change the cache signature on every toggle, causing
+        # expensive downstream re-execution.
         return {
             "required": {
-                "state": (["reviewing", "proceeding"], {
-                    "default": "reviewing",
-                    "tooltip": (
-                        "reviewing: Workflow is paused for inspection. "
-                        "Gates block, seed follows review_seed setting.\n"
-                        "proceeding: Workflow continues. "
-                        "Gates open, seed follows proceed_seed setting."
-                    ),
-                }),
-            },
-            "optional": {
-                "review_seed": (list(SEED_INTENTS.keys()), {
+                "pause_seed": (list(SEED_OPTIONS.keys()), {
                     "default": "random",
                     "tooltip": (
-                        "Seed behavior when reviewing:\n"
-                        "random: Generate new seed each queue\n"
+                        "Seed behavior when paused:\n"
+                        "random: Generate new seed each queue (default)\n"
                         "lock last seed: Reuse the last resolved seed\n"
                         "lock current: Keep current widget value\n"
                         "no override: Don't change seed behavior"
                     ),
                 }),
-                "proceed_seed": (list(SEED_INTENTS.keys()), {
-                    "default": "lock last seed",
-                    "tooltip": (
-                        "Seed behavior when proceeding:\n"
-                        "lock last seed: Reuse the last resolved seed (most common)\n"
-                        "random: Generate new seed each queue\n"
-                        "lock current: Keep current widget value\n"
-                        "no override: Don't change seed behavior"
-                    ),
-                }),
-                "review_gate": (list(REVIEW_GATE_MODES.keys()), {
+                "pause_gate": (list(PAUSE_GATE_OPTIONS.keys()), {
                     "default": "auto",
                     "tooltip": (
-                        "Gate behavior when reviewing:\n"
+                        "Gate behavior when paused:\n"
                         "auto: Smart block selection based on mask state\n"
                         "always block: Block regardless of state\n"
                         "block if empty mask: Block only when output mask is empty\n"
                         "block if empty editor: Block only when user hasn't drawn"
                     ),
                 }),
-                "proceed_gate": (list(PROCEED_GATE_MODES.keys()), {
-                    "default": "unblock (never)",
+                "play_seed": (list(SEED_OPTIONS.keys()), {
+                    "default": "lock last seed",
                     "tooltip": (
-                        "Gate behavior when proceeding:\n"
-                        "unblock (never): Never block — let execution continue\n"
+                        "Seed behavior when playing:\n"
+                        "lock last seed: Reuse the last resolved seed (default)\n"
+                        "random: Generate new seed each queue\n"
+                        "lock current: Keep current widget value\n"
+                        "no override: Don't change seed behavior"
+                    ),
+                }),
+                "play_gate": (list(PLAY_GATE_OPTIONS.keys()), {
+                    "default": "never block",
+                    "tooltip": (
+                        "Gate behavior when playing:\n"
+                        "never block: Never block -- let execution continue (default)\n"
                         "auto: Smart selection based on mask state"
                     ),
                 }),
             },
+            "optional": {},
         }
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
-        # Always re-execute — state changes are the whole point
-        return float("NaN")
+        # IS_CHANGED always runs before execute(). We use it to read the
+        # JS-side state from a hidden widget value that the JS injects
+        # into sys before prompt generation.
+        #
+        # Return a hash of ONLY the dropdown configs (not the state).
+        # These change rarely (user edits settings), so the node stays cached.
+        pause_seed = kwargs.get('pause_seed', 'random')
+        pause_gate = kwargs.get('pause_gate', 'auto')
+        play_seed = kwargs.get('play_seed', 'lock last seed')
+        play_gate = kwargs.get('play_gate', 'never block')
+        return f"{pause_seed}|{pause_gate}|{play_seed}|{play_gate}"
 
-    def execute(self, state, review_seed="random", proceed_seed="lock last seed",
-                review_gate="auto", proceed_gate="unblock (never)"):
+    def execute(self, pause_seed="random", pause_gate="auto",
+                play_seed="lock last seed", play_gate="never block"):
 
-        if state == "proceeding":
-            seed_intent = SEED_INTENTS.get(proceed_seed)
+        # Read active state from sys (written by JS via API or IS_CHANGED)
+        cmd_state = getattr(sys, '_dazzle_command_state', {})
+        state = cmd_state.get('state', 'paused')
+
+        # Resolve active intents based on state
+        if state == "playing":
+            seed_intent = SEED_OPTIONS.get(play_seed)
             gate_intent = "open"
-            gate_mode = PROCEED_GATE_MODES.get(proceed_gate, "never")
+            gate_mode = PLAY_GATE_OPTIONS.get(play_gate, "never")
         else:
-            seed_intent = SEED_INTENTS.get(review_seed)
+            seed_intent = SEED_OPTIONS.get(pause_seed)
             gate_intent = "block"
-            gate_mode = REVIEW_GATE_MODES.get(review_gate, "auto")
+            gate_mode = PAUSE_GATE_OPTIONS.get(pause_gate, "auto")
 
+        # Write resolved intent to sys for SmartResCalc
+        if not hasattr(sys, '_dazzle_command_state'):
+            sys._dazzle_command_state = {}
+        sys._dazzle_command_state['seed_intent'] = seed_intent
+
+        # Signal contains ALL configurations -- static across play/pause toggles.
+        # Receivers read active state from sys to pick the right config.
         signal = {
-            "state": state,
-            "seed_intent": seed_intent,
-            "gate_intent": gate_intent,
-            "gate_mode": gate_mode,
+            "pause_seed_intent": SEED_OPTIONS.get(pause_seed),
+            "pause_gate_intent": "block",
+            "pause_gate_mode": PAUSE_GATE_OPTIONS.get(pause_gate, "auto"),
+            "play_seed_intent": SEED_OPTIONS.get(play_seed),
+            "play_gate_intent": "open",
+            "play_gate_mode": PLAY_GATE_OPTIONS.get(play_gate, "never"),
             "schema_version": 1,
         }
 
         logger.debug(f"DazzleCommand: state={state}, seed_intent={seed_intent}, "
                       f"gate_intent={gate_intent}, gate_mode={gate_mode}")
+        logger.debug(f"{state.upper()}: seed={seed_intent}, gate={gate_intent} ({gate_mode})")
 
-        return (signal,)
+        last_seed = get_last_seed()
+        seed_display = str(last_seed) if last_seed is not None else "--"
+
+        return {"ui": {"text": [seed_display]},
+                "result": (signal,)}

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1-alpha] - 2026-03-27
+
+### Changed
+- **Cache-transparent state management** -- play/pause state removed from INPUT_TYPES to prevent
+  ComfyUI cache cascade. State communicated via `/dazzle-command/set-state` API endpoint and
+  `sys._dazzle_command_state` side-channel. Signal dict is static (contains both play and pause
+  configurations); receivers read active state from sys.
+- **Play/pause JS buttons** -- custom canvas widget replaces dropdown. Writes state to Python
+  via API call, stores on `node._dazzleCommandState` for cross-extension access.
+- **Seed display bar** -- read-only display below buttons shows last seed from connected
+  SmartResCalc (via onExecuted callback).
+
+### Fixed
+- **Dropdown label** -- "unblock (never)" renamed to "never block" for readability
+
 ## [0.1.0-alpha] - 2026-03-27
 
 ### Added

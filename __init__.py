@@ -51,6 +51,26 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DazzleCommand": "Dazzle Command",
 }
 
+# Register API endpoint for JS to set play/pause state
+# This writes to sys._dazzle_command_state without going through ComfyUI inputs
+import sys
+try:
+    from aiohttp import web
+    import server
+
+    @server.PromptServer.instance.routes.post("/dazzle-command/set-state")
+    async def set_dazzle_command_state(request):
+        data = await request.json()
+        if not hasattr(sys, '_dazzle_command_state'):
+            sys._dazzle_command_state = {}
+        sys._dazzle_command_state['state'] = data.get('state', 'paused')
+        _logger.debug(f"API: State set to: {sys._dazzle_command_state['state']}")
+        return web.json_response({"ok": True})
+
+    print(f"[DazzleCommand] Registered API endpoint: /dazzle-command/set-state")
+except Exception as e:
+    print(f"[DazzleCommand] WARNING: Could not register API endpoint: {e}")
+
 # Tell ComfyUI where to find our JavaScript files
 # Disabled on duplicate loads to prevent double JS extension registration
 WEB_DIRECTORY = None if _is_duplicate_load else "./web"
