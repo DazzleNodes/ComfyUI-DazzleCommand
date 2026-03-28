@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1-alpha] - 2026-03-28
+
+### Fixed
+- **Dynamic JS imports** -- replaced static `../../scripts/app.js` imports with auto-depth
+  detection via `importComfyCore()`. Fixes extension not loading when installed through
+  DazzleNodes aggregate (depth 3) vs standalone (depth 2). Same pattern used by SmartResCalc
+  and PBE.
+
 ## [0.2.0-alpha] - 2026-03-28
 
 ### Added

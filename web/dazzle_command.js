@@ -4,11 +4,29 @@
  * Play/pause buttons at the top of the node.
  * State is communicated to Python via API endpoint (not widget input)
  * to avoid ComfyUI cache invalidation.
+ *
+ * COMPATIBILITY NOTE:
+ * Uses dynamic imports with auto-depth detection to work in both:
+ * - Standalone mode: /extensions/dazzle-command/
+ * - DazzleNodes mode: /extensions/comfyui-dazzlenodes/dazzle-command/
  */
 
-import { app } from "../../scripts/app.js";
-import { api } from "../../scripts/api.js";
 import { logger } from "./debug_logger.js";
+
+// Dynamic import helper for standalone vs nested extension compatibility
+async function importComfyCore() {
+    const currentPath = import.meta.url;
+    const urlParts = new URL(currentPath).pathname.split('/').filter(p => p);
+    const depth = urlParts.length;
+    const prefix = '../'.repeat(depth);
+
+    const [appModule, apiModule] = await Promise.all([
+        import(`${prefix}scripts/app.js`),
+        import(`${prefix}scripts/api.js`)
+    ]);
+
+    return { app: appModule.app, api: apiModule.api };
+}
 
 const PLAY_COLOR = "#2a5a2a";
 const PAUSE_COLOR = "#5a4a1a";
@@ -24,13 +42,16 @@ function getState(nodeId) {
     return nodeStates.get(nodeId) || "paused";
 }
 
+// api reference set by IIFE after dynamic import
+let _api = null;
+
 async function setState(nodeId, state, node) {
     nodeStates.set(nodeId, state);
     // Store on node object so other extensions can read it
     if (node) node._dazzleCommandState = state;
     // Notify Python via API (writes to sys._dazzle_command_state)
     try {
-        await api.fetchApi("/dazzle-command/set-state", {
+        await _api.fetchApi("/dazzle-command/set-state", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ state, nodeId }),
@@ -40,7 +61,12 @@ async function setState(nodeId, state, node) {
     }
 }
 
-app.registerExtension({
+// Initialize extension with dynamic imports
+(async () => {
+    const { app, api } = await importComfyCore();
+    _api = api;
+
+    app.registerExtension({
     name: "DazzleNodes.DazzleCommand",
 
     async nodeCreated(node) {
@@ -274,4 +300,5 @@ app.registerExtension({
 
         node.setSize(node.computeSize());
     },
-});
+    });
+})();
