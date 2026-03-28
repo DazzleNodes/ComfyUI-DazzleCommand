@@ -1,4 +1,4 @@
-name: Dazzle Switch CI
+name: Dazzle Command CI
 
 on:
   push:

@@ -8,6 +8,7 @@
 
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { logger } from "./debug_logger.js";
 
 const PLAY_COLOR = "#2a5a2a";
 const PAUSE_COLOR = "#5a4a1a";
@@ -35,7 +36,7 @@ async function setState(nodeId, state, node) {
             body: JSON.stringify({ state, nodeId }),
         });
     } catch (e) {
-        console.warn("[DazzleCommand] API call failed:", e);
+        logger.error("API call failed:", e);
     }
 }
 
@@ -46,7 +47,16 @@ app.registerExtension({
         if (node.comfyClass !== "DazzleCommand") return;
 
         // Seed display -- updated via onExecuted
+        // Seed tracking:
+        // lastSeedValue: display string (updated by status listener from SmartResCalc)
+        // userEnteredSeed: explicitly typed by user via seed bar click (drives SmartResCalc)
+        //   null = DazzleCommand not driving, SmartResCalc controls seed
+        //   number = DazzleCommand drives, this value takes priority
         let lastSeedValue = null;
+        let userEnteredSeed = null;
+
+        // Expose on node for JS prompt hook to read
+        node._dazzleUserSeed = null;
 
         // Create custom widget for play/pause buttons + seed display
         const commandWidget = node.addCustomWidget({
@@ -102,8 +112,11 @@ app.registerExtension({
                 ctx.beginPath();
                 ctx.roundRect(margin, infoY, usable, infoH, 3);
                 ctx.fill();
-                const seedText = lastSeedValue !== null ? `seed: ${lastSeedValue}` : "seed: --";
-                ctx.fillStyle = lastSeedValue !== null ? "#aaaaaa" : "#555555";
+                // Show seed with source indicator
+                const isDriving = userEnteredSeed !== null;
+                const displaySeed = isDriving ? String(userEnteredSeed) : (lastSeedValue || "--");
+                const seedText = isDriving ? `seed: ${displaySeed} *` : `seed: ${displaySeed}`;
+                ctx.fillStyle = isDriving ? "#90cc90" : (lastSeedValue !== null ? "#aaaaaa" : "#555555");
                 ctx.font = "11px monospace";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
@@ -113,6 +126,7 @@ app.registerExtension({
 
                 this._playArea = { x: playX, y: btnY, w: btnWidth, h: btnHeight };
                 this._pauseArea = { x: pauseX, y: btnY, w: btnWidth, h: btnHeight };
+                this._seedArea = { x: margin, y: infoY, w: usable, h: infoH };
             },
 
             mouse(event, pos, node) {
@@ -129,6 +143,38 @@ app.registerExtension({
                         return true;
                     }
                 }
+                // Click seed bar — view/enter/clear seed value
+                if (this._seedArea) {
+                    const a = this._seedArea;
+                    if (localX >= a.x && localX <= a.x + a.w &&
+                        localY >= a.y && localY <= a.y + a.h) {
+                        const current = lastSeedValue || "";
+                        const result = prompt(
+                            "Enter seed (DazzleCommand drives)\n" +
+                            "Clear/empty to let SmartResCalc drive:",
+                            current
+                        );
+                        if (result === null) {
+                            // Cancelled — no change
+                        } else if (result.trim() === "") {
+                            // Cleared — return control to SmartResCalc
+                            userEnteredSeed = null;
+                            node._dazzleUserSeed = null;
+                            node.setDirtyCanvas(true);
+                        } else {
+                            const parsed = parseInt(result.trim());
+                            if (!isNaN(parsed) && parsed >= 0) {
+                                // User entered a seed — DazzleCommand drives
+                                userEnteredSeed = parsed;
+                                node._dazzleUserSeed = parsed;
+                                lastSeedValue = String(parsed);
+                                node.setDirtyCanvas(true);
+                            }
+                        }
+                        return true;
+                    }
+                }
+
                 if (this._pauseArea) {
                     const a = this._pauseArea;
                     if (localX >= a.x && localX <= a.x + a.w &&
@@ -182,16 +228,46 @@ app.registerExtension({
             if (origOnResize) origOnResize.call(this, size);
         };
 
-        // Seed display from Python execution
-        const origOnExecuted = node.onExecuted;
-        node.onExecuted = function(output) {
-            if (origOnExecuted) origOnExecuted.call(this, output);
-            if (output?.text && output.text.length > 0) {
-                const val = output.text[0];
-                lastSeedValue = (val && val !== "--") ? val : null;
-                node.setDirtyCanvas(true);
+        // Update seed display after each prompt completes.
+        // SmartResCalc isn't OUTPUT_NODE so "executed" events don't fire for it.
+        // Instead, read seedWidget.lastSeed from the connected SmartResCalc
+        // after the full prompt finishes. The "status" event with
+        // status.exec_info.queue_remaining === 0 indicates queue is done.
+        api.addEventListener("status", ({ detail }) => {
+            if (detail?.exec_info?.queue_remaining !== 0) return;
+
+            // Find connected SmartResCalc (via noodle) or any in graph
+            const allNodes = app.graph._nodes || [];
+            for (const srcNode of allNodes) {
+                if (srcNode.comfyClass !== 'SmartResolutionCalc') continue;
+
+                // Check if connected to this DazzleCommand
+                let isOurs = false;
+                const signalInput = srcNode.inputs?.find(i => i.name === 'dazzle_signal');
+                if (signalInput?.link) {
+                    const link = app.graph.links[signalInput.link];
+                    if (link && link.origin_id === node.id) isOurs = true;
+                } else {
+                    isOurs = true; // No noodle — accept any
+                }
+
+                if (isOurs) {
+                    const seedWidget = srcNode.widgets?.find(w => w.name === 'fill_seed');
+                    logger.debug(`status event: SmartResCalc node ${srcNode.id}, seedWidget=${!!seedWidget}, lastSeed=${seedWidget?.lastSeed}`);
+                    if (seedWidget?.lastSeed != null) {
+                        lastSeedValue = String(seedWidget.lastSeed);
+                        // Sync userEnteredSeed with node property
+                        // (cleared by SmartResCalc JS after transient use)
+                        if (node._dazzleUserSeed === null && userEnteredSeed !== null) {
+                            userEnteredSeed = null;
+                            logger.debug('Transient seed cleared by SmartResCalc, returning to display mode');
+                        }
+                        node.setDirtyCanvas(true);
+                    }
+                    break;
+                }
             }
-        };
+        });
 
         // Initialize Python-side state
         setState(node.id, "paused", node);

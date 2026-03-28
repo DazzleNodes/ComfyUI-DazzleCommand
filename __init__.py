@@ -48,7 +48,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "DazzleCommand": "Dazzle Command",
+    "DazzleCommand": "Dazzle Command (DazzleNodes)",
 }
 
 # Register API endpoint for JS to set play/pause state

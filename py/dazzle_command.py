@@ -20,10 +20,11 @@ logger = logging.getLogger("DazzleCommand")
 
 # Seed intent mappings (display label -> signal value)
 SEED_OPTIONS = {
-    "random": "random",
-    "lock last seed": "lock",
-    "lock current": "lock_current",
-    "no override": None,
+    "one run then random": "transient",
+    "new seed each run": "random",
+    "reuse last seed": "lock",
+    "keep widget value": "lock_current",
+    "SmartResCalc decides": None,
 }
 
 # Gate mode mappings for pause state
@@ -70,13 +71,15 @@ class DazzleCommandNode:
         return {
             "required": {
                 "pause_seed": (list(SEED_OPTIONS.keys()), {
-                    "default": "random",
+                    "default": "one run then random",
                     "tooltip": (
                         "Seed behavior when paused:\n"
-                        "random: Generate new seed each queue (default)\n"
-                        "lock last seed: Reuse the last resolved seed\n"
-                        "lock current: Keep current widget value\n"
-                        "no override: Don't change seed behavior"
+                        "one run then random: If a seed was entered (here or SmartResCalc), "
+                        "use it once then revert to random (default)\n"
+                        "new seed each run: Always generate fresh random, override widget\n"
+                        "reuse last seed: Use the seed from the previous execution\n"
+                        "keep widget value: Use SmartResCalc's current value persistently\n"
+                        "SmartResCalc decides: Don't interfere with seed behavior"
                     ),
                 }),
                 "pause_gate": (list(PAUSE_GATE_OPTIONS.keys()), {
@@ -90,13 +93,14 @@ class DazzleCommandNode:
                     ),
                 }),
                 "play_seed": (list(SEED_OPTIONS.keys()), {
-                    "default": "lock last seed",
+                    "default": "reuse last seed",
                     "tooltip": (
                         "Seed behavior when playing:\n"
-                        "lock last seed: Reuse the last resolved seed (default)\n"
-                        "random: Generate new seed each queue\n"
-                        "lock current: Keep current widget value\n"
-                        "no override: Don't change seed behavior"
+                        "reuse last seed: Use the seed from the previous execution (default)\n"
+                        "one run then random: If a seed was entered, use it once then random\n"
+                        "new seed each run: Always generate fresh random\n"
+                        "keep widget value: Use SmartResCalc's current value persistently\n"
+                        "SmartResCalc decides: Don't interfere with seed behavior"
                     ),
                 }),
                 "play_gate": (list(PLAY_GATE_OPTIONS.keys()), {
@@ -119,14 +123,14 @@ class DazzleCommandNode:
         #
         # Return a hash of ONLY the dropdown configs (not the state).
         # These change rarely (user edits settings), so the node stays cached.
-        pause_seed = kwargs.get('pause_seed', 'random')
+        pause_seed = kwargs.get('pause_seed', 'one run then random')
         pause_gate = kwargs.get('pause_gate', 'auto')
-        play_seed = kwargs.get('play_seed', 'lock last seed')
+        play_seed = kwargs.get('play_seed', 'reuse last seed')
         play_gate = kwargs.get('play_gate', 'never block')
         return f"{pause_seed}|{pause_gate}|{play_seed}|{play_gate}"
 
-    def execute(self, pause_seed="random", pause_gate="auto",
-                play_seed="lock last seed", play_gate="never block"):
+    def execute(self, pause_seed="one run then random", pause_gate="auto",
+                play_seed="reuse last seed", play_gate="never block"):
 
         # Read active state from sys (written by JS via API or IS_CHANGED)
         cmd_state = getattr(sys, '_dazzle_command_state', {})

@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Dazzle Switch
+about: Suggest an idea for Dazzle Command
 title: "[FEATURE] "
 labels: enhancement
 assignees: ''
