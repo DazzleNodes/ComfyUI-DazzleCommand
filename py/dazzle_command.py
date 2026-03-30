@@ -151,16 +151,17 @@ class DazzleCommandNode:
             sys._dazzle_command_state = {}
         sys._dazzle_command_state['seed_intent'] = seed_intent
 
-        # Signal contains ALL configurations -- static across play/pause toggles.
-        # Receivers read active state from sys to pick the right config.
+        # Signal carries active state so noodle-connected receivers can read
+        # per-node state instead of the global sys._dazzle_command_state (#5).
         signal = {
+            "active_state": state,
             "pause_seed_intent": SEED_OPTIONS.get(pause_seed),
             "pause_gate_intent": "block",
             "pause_gate_mode": PAUSE_GATE_OPTIONS.get(pause_gate, "auto"),
             "play_seed_intent": SEED_OPTIONS.get(play_seed),
             "play_gate_intent": "open",
             "play_gate_mode": PLAY_GATE_OPTIONS.get(play_gate, "never"),
-            "schema_version": 1,
+            "schema_version": 2,
         }
 
         logger.debug(f"DazzleCommand: state={state}, seed_intent={seed_intent}, "

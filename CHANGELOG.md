@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2-alpha] - 2026-03-30
+
+### Fixed
+- **Signal carries active state for multi-DC workflows** (#5) -- signal dict now includes
+  `active_state` field so noodle-connected PBE nodes read per-node state instead of the
+  global `sys._dazzle_command_state`. Fixes multi-DazzleCommand workflows where DC-1=Play
+  and DC-2=Pause caused PBE-2 to ignore its Pause state.
+- **Signal schema version bumped to 2** -- PBE nodes with schema v2 support read
+  `active_state` from signal; older PBE versions fall back to global (backward compat).
+
 ## [0.2.1-alpha] - 2026-03-28
 
 ### Fixed
