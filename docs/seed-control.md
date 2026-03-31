@@ -106,20 +106,20 @@ ComfyUI caches based on input values. If ANY input to a node changes, it re-exec
 
 ### How we solve it
 
-1. **State is NOT a ComfyUI input** — play/pause state is communicated via an API side-channel (`sys._dazzle_command_state`), invisible to ComfyUI's cache
-2. **Signal dict is static** — contains BOTH play and pause configurations. The output never changes between toggles.
+1. **Per-node state** — each DazzleCommand maintains independent state in a per-node registry (`sys._dazzle_command_states`). Play/pause is communicated via API with node ID, invisible to ComfyUI's cache.
+2. **Signal carries active_state** — PBE reads play/pause state from the signal dict via noodle. SmartResCalc reads seed intent from per-node registry via `_dazzle_dc_id` marker.
 3. **Seed resolution happens in JS** — the prompt interception hook resolves seeds BEFORE ComfyUI sees the prompt. When "reuse last seed" sends the same seed number, the prompt data is identical → cache hit.
-4. **Noodle stripping** — the `dazzle_signal` input is removed from prompt data during serialization. The noodle exists for multi-node binding but doesn't affect the cache.
+4. **Noodle stripping** — `dazzle_signal` is removed from SmartResCalc's prompt data (cache-transparent). PBE keeps the noodle for execution ordering.
 
 ### What re-executes and what doesn't
 
 | Node | On Play Toggle | Why |
 |------|---------------|-----|
-| Dazzle Command | Executes (OUTPUT_NODE) | Needs to run for seed display update |
-| SmartResCalc | **Cached** | Same seed = same input = cache hit |
+| Dazzle Command | Executes | IS_CHANGED detects state change, produces updated signal |
+| SmartResCalc | **Cached** | Same seed = same input = cache hit (signal stripped) |
 | KSampler | **Cached** | SmartResCalc cached = KSampler input unchanged |
 | VAE Decode | **Cached** | KSampler cached = VAE input unchanged |
-| Preview Bridge Extended | Executes | IS_CHANGED detects state change, must re-evaluate blocking |
+| Preview Bridge Extended | Executes | Signal changed (active_state), re-evaluates blocking |
 | Downstream inpaint KSampler | Executes | PBE unblocked = new output flows downstream |
 
 ## Interaction Matrix

@@ -36,7 +36,22 @@ Each mode is configurable independently for pause and play states:
 | **new seed each run** | Force fresh random every time |
 | **reuse last seed** | Lock to the seed from previous execution (default for play) |
 | **keep widget value** | Use SmartResCalc's current widget value persistently |
-| **SmartResCalc decides** | Don't interfere - normal widget behavior |
+| **SmartResCalc decides** | Don't interfere — normal widget behavior |
+
+### Understanding "one run then random"
+
+This is the default pause mode and the most common workflow pattern. It handles the case where you want to **try a specific seed once, then go back to exploring**:
+
+1. You see seed `847291038` in another workflow and want to test it
+2. Type it into DazzleCommand's seed bar (or SmartResCalc's widget)
+3. Run → generates with `847291038`
+4. Run again → automatically generates with a new random seed
+
+Without this mode, you'd have to manually switch between "keep widget value" and "new seed each run" every time you test a seed. The "one run" part uses your entered value; the "then random" part cleans up after itself.
+
+If the widget is already set to random (-1), this mode behaves the same as "new seed each run" — each run generates a fresh random.
+
+See [Seed Control Guide](docs/seed-control.md) for the full interaction matrix and transient lock details.
 
 ## Seed Entry
 
@@ -64,17 +79,17 @@ git clone https://github.com/DazzleNodes/ComfyUI-DazzleCommand.git
 
 | Node | Min Version | What It Controls |
 |------|------------|-----------------|
-| [Smart Resolution Calculator](https://github.com/djdarcy/ComfyUI-Smart-Resolution-Calc) | v0.11.0 | Seed behavior (random/lock/transient) |
-| [Preview Bridge Extended](https://github.com/DazzleNodes/ComfyUI-PreviewBridgeExtended) | v0.4.0-alpha | Execution blocking (play = unblock, pause = block) |
+| [Smart Resolution Calculator](https://github.com/DazzleNodes/ComfyUI-Smart-Resolution-Calc) | v0.11.3 | Seed behavior (random/lock/transient) |
+| [Preview Bridge Extended](https://github.com/DazzleNodes/ComfyUI-PreviewBridgeExtended) | v0.4.2-alpha | Execution blocking (play = unblock, pause = block) |
 
 ## How It Works
 
 Dazzle Command uses a cache-transparent architecture:
 
-- **State** (play/pause) is communicated via API side-channel, not ComfyUI inputs - avoids cache invalidation cascade
-- **Signal dict** is static (contains both play and pause configs) - output never changes between toggles
-- **Seed resolution** happens in JS before prompt generation - identical prompt data = ComfyUI cache hit
-- **Noodle stripping** - `dazzle_signal` input is removed from prompt data during serialization while preserving the noodle for multi-node binding
+- **Per-node state** — each DazzleCommand maintains independent state in a per-node registry. Multiple DazzleCommands in one workflow operate independently (DC-1 Play + DC-2 Pause)
+- **Signal carries active_state** — PBE reads play/pause state from its connected DC's signal via noodle, not from a global
+- **Seed resolution** happens in JS before prompt generation — identical prompt data = ComfyUI cache hit
+- **Noodle stripping** — `dazzle_signal` is removed from SmartResCalc's prompt data (cache-transparent) while PBE keeps the noodle for execution ordering
 
 ## Documentation
 

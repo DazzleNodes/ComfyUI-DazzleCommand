@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4-alpha] - 2026-03-30
+
+### Changed
+- **Updated README** -- companion version table, per-node state architecture description,
+  corrected SmartResCalc repo URL (DazzleNodes org)
+- **Updated seed-control.md** -- cache architecture docs reflect per-node state registry
+  and signal-carried active_state (replaces global side-channel description)
+
 ## [0.2.3-alpha] - 2026-03-30
 
 ### Added
