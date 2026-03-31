@@ -38,6 +38,23 @@ const MIN_NODE_WIDTH = 260;
 // Track state per node (JS-side, persisted via workflow save)
 const nodeStates = new Map();
 
+// Workflow identity tracking — detect new workflow vs mid-execution reconfigure.
+// When loadGraphData fires, we reset this so the next configure knows it's a fresh load.
+let _lastWorkflowId = null;
+let _workflowJustLoaded = false;
+
+// Resolved after dynamic import
+let _app = null;
+
+function _getWorkflowId() {
+    const id = _app?.graph?.extra?.id;
+    if (id) return id;
+    // Fallback for older workflows without UUID
+    const g = _app?.graph;
+    if (g) return `legacy-${g.last_node_id ?? 0}`;
+    return null;
+}
+
 function getState(nodeId) {
     return nodeStates.get(nodeId) || "paused";
 }
@@ -65,9 +82,26 @@ async function setState(nodeId, state, node) {
 (async () => {
     const { app, api } = await importComfyCore();
     _api = api;
+    _app = app;
 
     app.registerExtension({
     name: "DazzleNodes.DazzleCommand",
+
+    async setup() {
+        // Patch loadGraphData to detect new workflow loads vs reconfigures.
+        // When a new workflow loads, we clear nodeStates so onConfigure
+        // restores state from saved data. Mid-execution reconfigures
+        // preserve runtime state (user's play/pause clicks).
+        const origLoadGraphData = app.loadGraphData?.bind(app);
+        if (origLoadGraphData) {
+            app.loadGraphData = async function(graphData, ...args) {
+                _workflowJustLoaded = true;
+                _lastWorkflowId = null;
+                logger.debug("[Workflow] loadGraphData fired — will restore saved state on next configure");
+                return origLoadGraphData(graphData, ...args);
+            };
+        }
+    },
 
     async nodeCreated(node) {
         if (node.comfyClass !== "DazzleCommand") return;
@@ -223,24 +257,41 @@ async function setState(nodeId, state, node) {
             },
         });
 
-        // Restore state from workflow load
+        // Restore state from workflow load — but only on NEW workflow loads.
+        // Mid-execution reconfigures preserve runtime state (user's clicks).
         const origOnConfigure = node.onConfigure;
         node.onConfigure = function(config) {
             if (origOnConfigure) origOnConfigure.call(this, config);
-            const widgets = config?.widgets_values;
-            if (widgets) {
-                for (const v of widgets) {
-                    if (v === "playing" || v === "paused") {
-                        nodeStates.set(node.id, v);
-                        // Defer API call — node.id may be -1 during configure.
-                        // Wait for next tick when IDs are assigned (#5).
-                        const _node = node;
-                        const _state = v;
-                        setTimeout(() => {
-                            setState(_node.id, _state, _node);
-                        }, 100);
-                        break;
+
+            const currentWfId = _getWorkflowId();
+            const isNewWorkflow = _workflowJustLoaded || currentWfId !== _lastWorkflowId;
+
+            if (isNewWorkflow) {
+                // New workflow — restore saved state
+                _lastWorkflowId = currentWfId;
+                _workflowJustLoaded = false;
+
+                const widgets = config?.widgets_values;
+                if (widgets) {
+                    for (const v of widgets) {
+                        if (v === "playing" || v === "paused") {
+                            nodeStates.set(node.id, v);
+                            const _node = node;
+                            const _state = v;
+                            setTimeout(() => {
+                                setState(_node.id, _state, _node);
+                            }, 100);
+                            logger.debug(`[Configure] Node ${node.id}: NEW workflow, restored state='${v}'`);
+                            break;
+                        }
                     }
+                }
+            } else {
+                // Same workflow reconfigure — preserve runtime state
+                const existing = nodeStates.get(node.id);
+                if (existing) {
+                    node._dazzleCommandState = existing;
+                    logger.debug(`[Configure] Node ${node.id}: SAME workflow, preserved state='${existing}'`);
                 }
             }
         };

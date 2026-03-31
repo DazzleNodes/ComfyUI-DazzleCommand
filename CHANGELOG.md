@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5-alpha] - 2026-03-31
+
+### Fixed
+- **State reset race condition** -- play/pause state no longer reverts during mid-execution
+  workflow reconfigures. Uses `app.graph.extra.id` (workflow UUID) to distinguish new
+  workflow loads (restore saved state) from same-workflow reconfigures (preserve runtime
+  state). Fixes issue where clicking Play on DC-2 would silently reset DC-1 to Pause.
+
 ## [0.2.4-alpha] - 2026-03-30
 
 ### Changed
