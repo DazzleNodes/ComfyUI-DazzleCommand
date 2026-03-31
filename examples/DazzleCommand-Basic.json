@@ -1,0 +1,964 @@
+{
+  "id": "7dde89a7-67bb-4fc1-8f7d-2a8b7eba84df",
+  "revision": 0,
+  "last_node_id": 39,
+  "last_link_id": 92,
+  "nodes": [
+    {
+      "id": 28,
+      "type": "PreviewBridgeExtended",
+      "pos": [
+        222.51078321712603,
+        -117.64179689320687
+      ],
+      "size": [
+        360.9250854492187,
+        511.33331298828125
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 74
+        },
+        {
+          "name": "mask_opt",
+          "shape": 7,
+          "type": "MASK",
+          "link": 75
+        },
+        {
+          "name": "dazzle_signal",
+          "shape": 7,
+          "type": "DAZZLE_SIGNAL",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            76
+          ]
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": [
+            77
+          ]
+        },
+        {
+          "name": "info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-preview-bridge-extended",
+        "ver": "5ae227ab92ea2d19f8cc146b1a50672357e34d3c",
+        "Node name for S&R": "PreviewBridgeExtended",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        },
+        "image": "clipspace/clipspace-painted-masked-1774585270021.png [input]"
+      },
+      "widgets_values": [
+        "PreviewBridgeExt/PBE-_temp_bvlog_00001_.png [temp]",
+        "combined",
+        "combined",
+        "always",
+        "never"
+      ]
+    },
+    {
+      "id": 30,
+      "type": "DazzleOptions",
+      "pos": [
+        143.67691401396758,
+        842.9936372641197
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "options_in",
+          "shape": 7,
+          "type": "DAZZLE_OPTIONS",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "options",
+          "type": "DAZZLE_OPTIONS",
+          "links": [
+            78
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "DazzleOptions",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        }
+      },
+      "widgets_values": [
+        "auto",
+        1,
+        "gaussian",
+        false
+      ]
+    },
+    {
+      "id": 33,
+      "type": "Display Any (rgthree)",
+      "pos": [
+        1018.9086433563405,
+        1181.037112473304
+      ],
+      "size": [
+        234.1856889204545,
+        255.39397638494324
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "dir": 3,
+          "name": "source",
+          "type": "*",
+          "link": 80
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "rgthree-comfy",
+        "ver": "1.0.2509092031",
+        "Node name for S&R": "Display Any (rgthree)",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        }
+      },
+      "widgets_values": [
+        "Mode: HEIGHT & image_ar: 460:511 (920×1022) | HEIGHT: 1024, calculated W: 922 from image AR 460:511 | MP: 0.95 | Div: 16 | Latent: Empty | Seed: 5225"
+      ]
+    },
+    {
+      "id": 14,
+      "type": "PreviewImage",
+      "pos": [
+        643.1387399262321,
+        -114.57224072044038
+      ],
+      "size": [
+        369.3333740234374,
+        518.6666870117188
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 76
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 17,
+      "type": "PreviewImage",
+      "pos": [
+        1050.7957273006218,
+        -101.86899225150106
+      ],
+      "size": [
+        369.33349609375,
+        500.66668701171875
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 14
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 16,
+      "type": "MaskToImage",
+      "pos": [
+        924.4527676485744,
+        -192.6323264842356
+      ],
+      "size": [
+        193.2779296875,
+        26
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 77
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "MaskToImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 35,
+      "type": "PreviewImage",
+      "pos": [
+        2257.807665901763,
+        680.6501469492314
+      ],
+      "size": [
+        369.33349609375,
+        500.66668701171875
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 84
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 36,
+      "type": "MaskToImage",
+      "pos": [
+        2131.464706249715,
+        589.8868127164968
+      ],
+      "size": [
+        193.2779296875,
+        26
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 86
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            84
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "MaskToImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 34,
+      "type": "PreviewImage",
+      "pos": [
+        1850.1506785273725,
+        667.946898480292
+      ],
+      "size": [
+        369.3333740234374,
+        518.6666870117188
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 85
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 18,
+      "type": "Display Any (rgthree)",
+      "pos": [
+        416.52673959459736,
+        440.6215378179661
+      ],
+      "size": [
+        305.5190185546875,
+        240.36359197443176
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 4,
+      "inputs": [
+        {
+          "dir": 3,
+          "name": "source",
+          "type": "*",
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "rgthree-comfy",
+        "ver": "1.0.2509092031",
+        "Node name for S&R": "Display Any (rgthree)",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        }
+      },
+      "widgets_values": [
+        "== Preview Bridge Extended ==\nImage: 920x1022\nOutput mode: combined\nRestore: never\nBlock: never\nImages changed: False\nInput mask (red): valid\nEditor mask (orange): empty/none\nPreview showing: input(red)\nOutput mask: has content\nStatus: passing"
+      ]
+    },
+    {
+      "id": 32,
+      "type": "PreviewBridgeExtended",
+      "pos": [
+        1428.1305924696671,
+        671.0647990360361
+      ],
+      "size": [
+        308.2583984375,
+        448.6666259765625
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 82
+        },
+        {
+          "name": "mask_opt",
+          "shape": 7,
+          "type": "MASK",
+          "link": 83
+        },
+        {
+          "name": "dazzle_signal",
+          "shape": 7,
+          "type": "DAZZLE_SIGNAL",
+          "link": 92
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            85
+          ]
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": [
+            86
+          ]
+        },
+        {
+          "name": "info",
+          "type": "STRING",
+          "links": [
+            87
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-preview-bridge-extended",
+        "ver": "5ae227ab92ea2d19f8cc146b1a50672357e34d3c",
+        "Node name for S&R": "PreviewBridgeExtended",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        }
+      },
+      "widgets_values": [
+        "PreviewBridgeExt/PBE-node32_00001_.png [temp]",
+        "combined",
+        "combined",
+        "never",
+        "always"
+      ]
+    },
+    {
+      "id": 37,
+      "type": "Display Any (rgthree)",
+      "pos": [
+        1853.8085933864552,
+        1261.2742391349334
+      ],
+      "size": [
+        305.5190185546875,
+        240.36359197443176
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "dir": 3,
+          "name": "source",
+          "type": "*",
+          "link": 87
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "rgthree-comfy",
+        "ver": "1.0.2509092031",
+        "Node name for S&R": "Display Any (rgthree)",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        }
+      },
+      "widgets_values": [
+        "== Preview Bridge Extended ==\nImage: 920x1022\nOutput mode: combined\nRestore: never\nBlock: always\nImages changed: False\nInput mask (red): valid\nEditor mask (orange): empty/none\nPreview showing: input(red)\nOutput mask: has content\nStatus: BLOCKING"
+      ]
+    },
+    {
+      "id": 11,
+      "type": "LoadImage",
+      "pos": [
+        -205.5020517032845,
+        -98.21274555347885
+      ],
+      "size": [
+        356.4474677124024,
+        480.8187208251952
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            74,
+            82,
+            88
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [
+            75,
+            83
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "LoadImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        },
+        "image": "clipspace/clipspace-painted-masked-1774577659610.png [input]"
+      },
+      "widgets_values": [
+        "test-920x1022_clipspace-masked.png",
+        "image"
+      ]
+    },
+    {
+      "id": 29,
+      "type": "SmartResolutionCalc",
+      "pos": [
+        610.8100368368786,
+        830.4118780483163
+      ],
+      "size": [
+        325.3208984375,
+        591
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 88
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        },
+        {
+          "name": "fill_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "dazzle_options",
+          "shape": 7,
+          "type": "DAZZLE_OPTIONS",
+          "link": 78
+        },
+        {
+          "name": "dazzle_signal",
+          "shape": 7,
+          "type": "DAZZLE_SIGNAL",
+          "link": 91
+        }
+      ],
+      "outputs": [
+        {
+          "name": "megapixels",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": null
+        },
+        {
+          "name": "info",
+          "type": "STRING",
+          "links": [
+            80
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SmartResolutionCalc",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.1"
+        }
+      },
+      "widgets_values": [
+        "HEIGHT & IMG AR Only (460:511)",
+        "3:4 (SD Video Portrait)",
+        "16",
+        false,
+        "Calculating...",
+        "5.2:2.5",
+        1,
+        1,
+        "black",
+        null,
+        0,
+        {
+          "on": true,
+          "value": -1
+        },
+        "img2img",
+        0.2,
+        {
+          "blend": 0,
+          "cutoff": 0.2
+        },
+        -1,
+        "auto",
+        "#522525",
+        {
+          "on": true,
+          "value": 0
+        },
+        null,
+        {
+          "on": false,
+          "value": 1
+        },
+        {
+          "on": false,
+          "value": 1024
+        },
+        {
+          "on": true,
+          "value": 1024
+        },
+        1
+      ],
+      "widgets_values_by_name": {
+        "mode_status": "Calculating...",
+        "aspect_ratio": "3:4 (SD Video Portrait)",
+        "divisible_by": "16",
+        "custom_ratio": false,
+        "custom_aspect_ratio": "5.2:2.5",
+        "batch_size": 1,
+        "scale": 1,
+        "fill_type": "black",
+        "color_picker_button": null,
+        "blend_strength": 0,
+        "fill_seed": {
+          "on": true,
+          "value": -1
+        },
+        "image_purpose": "img2img",
+        "cutoff": 0.2,
+        "spectral_blend_2d": {
+          "blend": 0,
+          "cutoff": 0.2
+        },
+        "feature_size": -1,
+        "output_image_mode": "auto",
+        "fill_color": "#522525",
+        "image_mode": {
+          "on": true,
+          "value": 0
+        },
+        "copy_from_image": null,
+        "dimension_megapixel": {
+          "on": false,
+          "value": 1
+        },
+        "dimension_width": {
+          "on": false,
+          "value": 1024
+        },
+        "dimension_height": {
+          "on": true,
+          "value": 1024
+        }
+      },
+      "widgets_config": {
+        "scale": {
+          "leftStep": 0.05,
+          "rightStep": 0.1
+        }
+      }
+    },
+    {
+      "id": 39,
+      "type": "DazzleCommand",
+      "pos": [
+        1074.4602271704384,
+        801.2532840026032
+      ],
+      "size": [
+        260,
+        194
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "signal",
+          "type": "DAZZLE_SIGNAL",
+          "links": [
+            91,
+            92
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "DazzleNodes/ComfyUI-DazzleCommand",
+        "ver": "48dfdb36734655162a6e6ac54bed0a31d8bfd931",
+        "Node name for S&R": "DazzleCommand",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        null,
+        "one run then random",
+        "auto",
+        "reuse last seed",
+        "never block"
+      ]
+    }
+  ],
+  "links": [
+    [
+      14,
+      16,
+      0,
+      17,
+      0,
+      "IMAGE"
+    ],
+    [
+      74,
+      11,
+      0,
+      28,
+      0,
+      "IMAGE"
+    ],
+    [
+      75,
+      11,
+      1,
+      28,
+      1,
+      "MASK"
+    ],
+    [
+      76,
+      28,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      77,
+      28,
+      1,
+      16,
+      0,
+      "MASK"
+    ],
+    [
+      78,
+      30,
+      0,
+      29,
+      3,
+      "DAZZLE_OPTIONS"
+    ],
+    [
+      80,
+      29,
+      7,
+      33,
+      0,
+      "STRING"
+    ],
+    [
+      82,
+      11,
+      0,
+      32,
+      0,
+      "IMAGE"
+    ],
+    [
+      83,
+      11,
+      1,
+      32,
+      1,
+      "MASK"
+    ],
+    [
+      84,
+      36,
+      0,
+      35,
+      0,
+      "IMAGE"
+    ],
+    [
+      85,
+      32,
+      0,
+      34,
+      0,
+      "IMAGE"
+    ],
+    [
+      86,
+      32,
+      1,
+      36,
+      0,
+      "MASK"
+    ],
+    [
+      87,
+      32,
+      2,
+      37,
+      0,
+      "STRING"
+    ],
+    [
+      88,
+      11,
+      0,
+      29,
+      0,
+      "IMAGE"
+    ],
+    [
+      91,
+      39,
+      0,
+      29,
+      4,
+      "DAZZLE_SIGNAL"
+    ],
+    [
+      92,
+      39,
+      0,
+      32,
+      2,
+      "DAZZLE_SIGNAL"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9090909090909091,
+      "offset": [
+        -398.43522717043845,
+        -121.6239871276033
+      ]
+    },
+    "ue_links": [],
+    "links_added_by_ue": [],
+    "frontendVersion": "1.42.8",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

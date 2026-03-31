@@ -6,16 +6,47 @@ and execution gates (Preview Bridge Extended) from a single toggle.
 
 Architecture:
 - The play/pause STATE is NOT a ComfyUI input (would cause cache cascade)
-- State lives in JS widget, communicated via sys._dazzle_command_state
-- IS_CHANGED writes state to sys (runs before any execute)
-- The signal dict is STATIC (contains both play and pause configs)
-- Receivers read active state from sys, pick the right config from signal
+- State lives in JS widget, communicated via per-node state registry (#5)
+- IS_CHANGED reads per-node state to trigger re-execution on toggle
+- The signal dict carries active_state for noodle-connected receivers
+- Each DazzleCommand maintains independent state (no global cross-talk)
 """
 
 import logging
 import sys
 
 logger = logging.getLogger("DazzleCommand")
+
+
+class DazzleCommandState:
+    """Per-node state for a single DazzleCommand instance.
+
+    Stored in sys._dazzle_command_states keyed by node ID.
+    Replaces the global sys._dazzle_command_state singleton (#5).
+    """
+    __slots__ = ('node_id', 'state', 'seed_intent',
+                 'gate_intent', 'gate_mode', 'signal')
+
+    def __init__(self, node_id):
+        self.node_id = node_id
+        self.state = 'paused'
+        self.seed_intent = None
+        self.gate_intent = None
+        self.gate_mode = None
+        self.signal = None  # Full signal dict for PBE gate config
+
+    def __repr__(self):
+        return f"DazzleCommandState(id={self.node_id}, state={self.state}, seed={self.seed_intent})"
+
+
+def get_dc_state(node_id):
+    """Get or create per-node DazzleCommand state."""
+    node_id = str(node_id)
+    if not hasattr(sys, '_dazzle_command_states'):
+        sys._dazzle_command_states = {}
+    if node_id not in sys._dazzle_command_states:
+        sys._dazzle_command_states[node_id] = DazzleCommandState(node_id)
+    return sys._dazzle_command_states[node_id]
 
 
 # Seed intent mappings (display label -> signal value)
@@ -60,14 +91,17 @@ class DazzleCommandNode:
     RETURN_TYPES = ("DAZZLE_SIGNAL",)
     RETURN_NAMES = ("signal",)
     FUNCTION = "execute"
-    OUTPUT_NODE = True
+    # OUTPUT_NODE intentionally False — PBE requests DC's output via noodle,
+    # so DC executes when needed. Setting True would force re-execution every
+    # prompt (ComfyUI doesn't cache OUTPUT_NODEs), causing cache cascade to
+    # all downstream nodes via PBE's dazzle_signal input.
 
     @classmethod
     def INPUT_TYPES(cls):
-        # NOTE: "state" is intentionally NOT here. It's a JS-only widget
-        # communicated via sys._dazzle_command_state. Including it as an
-        # input would change the cache signature on every toggle, causing
-        # expensive downstream re-execution.
+        # NOTE: "state" is intentionally NOT a ComfyUI input. It's a
+        # JS-only widget communicated via per-node state registry (#5).
+        # IS_CHANGED reads state to trigger re-execution on toggle;
+        # the signal carries active_state for downstream PBE nodes.
         return {
             "required": {
                 "pause_seed": (list(SEED_OPTIONS.keys()), {
@@ -113,28 +147,60 @@ class DazzleCommandNode:
                 }),
             },
             "optional": {},
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
-        # IS_CHANGED always runs before execute(). We use it to read the
-        # JS-side state from a hidden widget value that the JS injects
-        # into sys before prompt generation.
-        #
-        # Return a hash of ONLY the dropdown configs (not the state).
-        # These change rarely (user edits settings), so the node stays cached.
+        # IS_CHANGED runs for ALL nodes BEFORE any execute(). We build
+        # the signal dict here so PBE can read gate config even if PBE
+        # executes before DazzleCommand (no noodle dependency after
+        # JS strips dazzle_signal from PBE's prompt inputs).
+        import sys
+        unique_id = kwargs.get('unique_id', '')
+        dc_state = get_dc_state(unique_id)
+        state = dc_state.state
         pause_seed = kwargs.get('pause_seed', 'one run then random')
         pause_gate = kwargs.get('pause_gate', 'auto')
         play_seed = kwargs.get('play_seed', 'reuse last seed')
         play_gate = kwargs.get('play_gate', 'never block')
-        return f"{pause_seed}|{pause_gate}|{play_seed}|{play_gate}"
+
+        # Resolve intents based on state
+        if state == "playing":
+            seed_intent = SEED_OPTIONS.get(play_seed)
+            gate_intent = "open"
+            gate_mode = PLAY_GATE_OPTIONS.get(play_gate, "never")
+        else:
+            seed_intent = SEED_OPTIONS.get(pause_seed)
+            gate_intent = "block"
+            gate_mode = PAUSE_GATE_OPTIONS.get(pause_gate, "auto")
+
+        # Store in per-node state so PBE can read during its execute
+        dc_state.seed_intent = seed_intent
+        dc_state.gate_intent = gate_intent
+        dc_state.gate_mode = gate_mode
+        dc_state.signal = {
+            "active_state": state,
+            "pause_seed_intent": SEED_OPTIONS.get(pause_seed),
+            "pause_gate_intent": "block",
+            "pause_gate_mode": PAUSE_GATE_OPTIONS.get(pause_gate, "auto"),
+            "play_seed_intent": SEED_OPTIONS.get(play_seed),
+            "play_gate_intent": "open",
+            "play_gate_mode": PLAY_GATE_OPTIONS.get(play_gate, "never"),
+            "schema_version": 2,
+        }
+
+        return f"{state}|{pause_seed}|{pause_gate}|{play_seed}|{play_gate}"
 
     def execute(self, pause_seed="one run then random", pause_gate="auto",
-                play_seed="reuse last seed", play_gate="never block"):
+                play_seed="reuse last seed", play_gate="never block",
+                unique_id=""):
 
-        # Read active state from sys (written by JS via API or IS_CHANGED)
-        cmd_state = getattr(sys, '_dazzle_command_state', {})
-        state = cmd_state.get('state', 'paused')
+        # Read active state from per-node registry (#5)
+        dc_state = get_dc_state(unique_id)
+        state = dc_state.state
 
         # Resolve active intents based on state
         if state == "playing":
@@ -146,13 +212,14 @@ class DazzleCommandNode:
             gate_intent = "block"
             gate_mode = PAUSE_GATE_OPTIONS.get(pause_gate, "auto")
 
-        # Write resolved intent to sys for SmartResCalc
-        if not hasattr(sys, '_dazzle_command_state'):
-            sys._dazzle_command_state = {}
-        sys._dazzle_command_state['seed_intent'] = seed_intent
+        # Write resolved state to per-node registry (#5)
+        dc_state.seed_intent = seed_intent
+        dc_state.gate_intent = gate_intent
+        dc_state.gate_mode = gate_mode
 
-        # Signal carries active state so noodle-connected receivers can read
-        # per-node state instead of the global sys._dazzle_command_state (#5).
+        # Signal dict with all configs. JS strips this from SmartResCalc and
+        # PBE prompt inputs to prevent cache cascade. Consumers read per-node
+        # state from sys._dazzle_command_states via _dazzle_dc_id marker.
         signal = {
             "active_state": state,
             "pause_seed_intent": SEED_OPTIONS.get(pause_seed),
@@ -163,6 +230,7 @@ class DazzleCommandNode:
             "play_gate_mode": PLAY_GATE_OPTIONS.get(play_gate, "never"),
             "schema_version": 2,
         }
+        dc_state.signal = signal
 
         logger.debug(f"DazzleCommand: state={state}, seed_intent={seed_intent}, "
                       f"gate_intent={gate_intent}, gate_mode={gate_mode}")

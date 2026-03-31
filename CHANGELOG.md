@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3-alpha] - 2026-03-30
+
+### Added
+- **Per-node state registry** (#5) -- `DazzleCommandState` class replaces global
+  `sys._dazzle_command_state` singleton. Each DazzleCommand maintains independent state
+  in `sys._dazzle_command_states` keyed by node ID. Enables correct multi-DazzleCommand
+  workflows where DC-1=Play and DC-2=Pause operate independently.
+- **`unique_id` hidden input** -- DazzleCommand now receives its ComfyUI node ID for
+  per-node state lookup in IS_CHANGED and execute().
+- **IS_CHANGED builds signal** -- signal dict (with active_state and gate config) is
+  built during IS_CHANGED (before any execute runs), ensuring PBE can read gate config
+  regardless of execution order.
+
+### Changed
+- **API endpoint uses node ID** -- `/dazzle-command/set-state` keys state by `nodeId`
+  from JS instead of writing to a global. JS defers `setState` calls during page load
+  to ensure node IDs are assigned (fixes -1 ID problem).
+- **Removed OUTPUT_NODE** -- DazzleCommand no longer marked as OUTPUT_NODE. PBE requests
+  DC's output via noodle, so DC executes when needed. Removing OUTPUT_NODE prevents
+  unnecessary re-execution on every prompt.
+- **Removed legacy global writes** -- no backward compatibility with old global
+  `sys._dazzle_command_state`. Clean break for v0.2.3+.
+
 ## [0.2.2-alpha] - 2026-03-30
 
 ### Fixed

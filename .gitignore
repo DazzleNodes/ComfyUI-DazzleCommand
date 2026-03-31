@@ -139,6 +139,8 @@ credentials.json
 #######################
 
 # Add custom patterns below
+**/bak/
+**/baks/
 
 # RepoKit Private Content Protection (DO NOT REMOVE)
 CLAUDE.md

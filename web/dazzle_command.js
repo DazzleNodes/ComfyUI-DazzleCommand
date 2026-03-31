@@ -232,7 +232,13 @@ async function setState(nodeId, state, node) {
                 for (const v of widgets) {
                     if (v === "playing" || v === "paused") {
                         nodeStates.set(node.id, v);
-                        setState(node.id, v, node);
+                        // Defer API call — node.id may be -1 during configure.
+                        // Wait for next tick when IDs are assigned (#5).
+                        const _node = node;
+                        const _state = v;
+                        setTimeout(() => {
+                            setState(_node.id, _state, _node);
+                        }, 100);
                         break;
                     }
                 }
@@ -295,8 +301,12 @@ async function setState(nodeId, state, node) {
             }
         });
 
-        // Initialize Python-side state
-        setState(node.id, "paused", node);
+        // Initialize Python-side state — defer until node ID is assigned (#5)
+        const _initNode = node;
+        setTimeout(() => {
+            const savedState = nodeStates.get(_initNode.id) || "paused";
+            setState(_initNode.id, savedState, _initNode);
+        }, 150);
 
         node.setSize(node.computeSize());
     },
