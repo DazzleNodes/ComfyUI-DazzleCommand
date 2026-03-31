@@ -91,10 +91,7 @@ class DazzleCommandNode:
     RETURN_TYPES = ("DAZZLE_SIGNAL",)
     RETURN_NAMES = ("signal",)
     FUNCTION = "execute"
-    # OUTPUT_NODE intentionally False — PBE requests DC's output via noodle,
-    # so DC executes when needed. Setting True would force re-execution every
-    # prompt (ComfyUI doesn't cache OUTPUT_NODEs), causing cache cascade to
-    # all downstream nodes via PBE's dazzle_signal input.
+    OUTPUT_NODE = True
 
     @classmethod
     def INPUT_TYPES(cls):

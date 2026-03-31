@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6-alpha] - 2026-03-31
+
+### Added
+- **Reset All button** -- small square button next to Pause with circular arrow icon.
+  Clicking it sets ALL DazzleCommand nodes in the workflow back to paused state.
+  Useful for resetting a multi-DC workflow to a clean starting state for a fresh run.
+
+### Changed
+- **Restored OUTPUT_NODE = True** -- DazzleCommand is an execution entry point again.
+  Research confirmed OUTPUT_NODE does not bypass caching (only marks entry points).
+  The real cache fix was PBE's deterministic preview filenames.
+
 ## [0.2.5-alpha] - 2026-03-31
 
 ### Fixed

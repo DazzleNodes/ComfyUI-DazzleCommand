@@ -126,8 +126,10 @@ async function setState(nodeId, state, node) {
             draw(ctx, nodeRef, widgetWidth, y, widgetHeight) {
                 const margin = 15;
                 const usable = widgetWidth - margin * 2;
-                const btnWidth = (usable - 10) / 2;
                 const btnHeight = 28;
+                const resetSize = btnHeight;  // Perfect square matching button height
+                const gap = 2;
+                const btnWidth = (usable - gap - resetSize - gap) / 2;
                 const btnY = y + 4;
                 const isPlaying = getState(node.id) === "playing";
 
@@ -151,7 +153,7 @@ async function setState(nodeId, state, node) {
                 ctx.fillText("\u25B6 PLAY", playX + btnWidth / 2, btnY + btnHeight / 2);
 
                 // Pause button
-                const pauseX = margin + btnWidth + 10;
+                const pauseX = margin + btnWidth + gap;
                 ctx.fillStyle = !isPlaying ? PAUSE_COLOR : BUTTON_BG;
                 ctx.beginPath();
                 ctx.roundRect(pauseX, btnY, btnWidth, btnHeight, BUTTON_RADIUS);
@@ -164,6 +166,37 @@ async function setState(nodeId, state, node) {
                 ctx.fillStyle = !isPlaying ? "#eeee90" : "#999999";
                 ctx.font = "bold 13px sans-serif";
                 ctx.fillText("\u23F8 PAUSE", pauseX + btnWidth / 2, btnY + btnHeight / 2);
+
+                // Reset All button (perfect square, right of pause)
+                const resetX = pauseX + btnWidth + gap;
+                const resetY = btnY;
+                ctx.fillStyle = "#3a3a4a";
+                ctx.beginPath();
+                ctx.roundRect(resetX, resetY, resetSize, resetSize, 3);
+                ctx.fill();
+                ctx.strokeStyle = "#555566";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                // Draw recycle/reset arrow icon
+                const cx = resetX + resetSize / 2;
+                const cy = resetY + resetSize / 2;
+                const r = resetSize * 0.28;
+                ctx.strokeStyle = "#aaaacc";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, -0.5, Math.PI * 1.3);
+                ctx.stroke();
+                // Arrowhead
+                const tipAngle = Math.PI * 1.3;
+                const tipX = cx + r * Math.cos(tipAngle);
+                const tipY = cy + r * Math.sin(tipAngle);
+                ctx.fillStyle = "#aaaacc";
+                ctx.beginPath();
+                ctx.moveTo(tipX - 3, tipY - 2);
+                ctx.lineTo(tipX + 2, tipY + 1);
+                ctx.lineTo(tipX, tipY + 4);
+                ctx.closePath();
+                ctx.fill();
 
                 // Seed display
                 const infoY = btnY + btnHeight + 6;
@@ -186,6 +219,7 @@ async function setState(nodeId, state, node) {
 
                 this._playArea = { x: playX, y: btnY, w: btnWidth, h: btnHeight };
                 this._pauseArea = { x: pauseX, y: btnY, w: btnWidth, h: btnHeight };
+                this._resetArea = { x: resetX, y: resetY, w: resetSize, h: resetSize };
                 this._seedArea = { x: margin, y: infoY, w: usable, h: infoH };
             },
 
@@ -241,6 +275,22 @@ async function setState(nodeId, state, node) {
                         localY >= a.y && localY <= a.y + a.h) {
                         setState(node.id, "paused", node);
                         node.setDirtyCanvas(true);
+                        return true;
+                    }
+                }
+                // Reset All — set every DazzleCommand to paused
+                if (this._resetArea) {
+                    const a = this._resetArea;
+                    if (localX >= a.x && localX <= a.x + a.w &&
+                        localY >= a.y && localY <= a.y + a.h) {
+                        const allNodes = app.graph._nodes || [];
+                        for (const n of allNodes) {
+                            if (n.comfyClass === "DazzleCommand") {
+                                setState(n.id, "paused", n);
+                                n.setDirtyCanvas(true);
+                            }
+                        }
+                        logger.debug("[Reset All] All DazzleCommand nodes set to paused");
                         return true;
                     }
                 }
