@@ -4,49 +4,27 @@ Dazzle Command -- Workflow orchestration node.
 Outputs a DAZZLE_SIGNAL dict that coordinates seed control (SmartResCalc)
 and execution gates (Preview Bridge Extended) from a single toggle.
 
-Architecture:
-- The play/pause STATE is NOT a ComfyUI input (would cause cache cascade)
-- State lives in JS widget, communicated via per-node state registry (#5)
-- IS_CHANGED reads per-node state to trigger re-execution on toggle
-- The signal dict carries active_state for noodle-connected receivers
-- Each DazzleCommand maintains independent state (no global cross-talk)
+Architecture (v0.3.x, stateless):
+- Play/pause state lives in JS: on the node object at runtime and in
+  node.properties per workflow-tab draft. Python holds NO state.
+- At queue time the JS prompt hook injects the live state into this node's
+  prompt inputs as `dazzle_state` (declared hidden input below). Because it
+  is a prompt input, it is part of ComfyUI's cache key: toggling play/pause
+  is exactly the change that should re-execute this node. No IS_CHANGED,
+  no API side-channel, no sys registry -- each queued prompt is
+  self-contained, so multiple open workflow tabs cannot contaminate each
+  other (node IDs collide across tabs; any server-side store keyed by node
+  ID was wrong the moment a second tab opened).
+- SmartResCalc never sees this node in its prompt (JS strips the
+  dazzle_signal link and bakes the resolved seed into fill_seed directly).
+- PBE keeps the noodle: it receives the signal dict as a real input, reads
+  active_state from it, and re-executes when this node re-executes.
+- Headless/API prompts (no JS) omit dazzle_state and run as paused.
 """
 
 import logging
-import sys
 
 logger = logging.getLogger("DazzleCommand")
-
-
-class DazzleCommandState:
-    """Per-node state for a single DazzleCommand instance.
-
-    Stored in sys._dazzle_command_states keyed by node ID.
-    Replaces the global sys._dazzle_command_state singleton (#5).
-    """
-    __slots__ = ('node_id', 'state', 'seed_intent',
-                 'gate_intent', 'gate_mode', 'signal')
-
-    def __init__(self, node_id):
-        self.node_id = node_id
-        self.state = 'paused'
-        self.seed_intent = None
-        self.gate_intent = None
-        self.gate_mode = None
-        self.signal = None  # Full signal dict for PBE gate config
-
-    def __repr__(self):
-        return f"DazzleCommandState(id={self.node_id}, state={self.state}, seed={self.seed_intent})"
-
-
-def get_dc_state(node_id):
-    """Get or create per-node DazzleCommand state."""
-    node_id = str(node_id)
-    if not hasattr(sys, '_dazzle_command_states'):
-        sys._dazzle_command_states = {}
-    if node_id not in sys._dazzle_command_states:
-        sys._dazzle_command_states[node_id] = DazzleCommandState(node_id)
-    return sys._dazzle_command_states[node_id]
 
 
 # Seed intent mappings (display label -> signal value)
@@ -73,14 +51,6 @@ PLAY_GATE_OPTIONS = {
 }
 
 
-def get_last_seed():
-    """Read the last seed reported by any signal consumer."""
-    registry = getattr(sys, '_dazzle_seed_registry', None)
-    if registry:
-        return registry.get('last')
-    return None
-
-
 class DazzleCommandNode:
     """
     Workflow orchestration node -- play/pause toggle coordinates
@@ -95,10 +65,13 @@ class DazzleCommandNode:
 
     @classmethod
     def INPUT_TYPES(cls):
-        # NOTE: "state" is intentionally NOT a ComfyUI input. It's a
-        # JS-only widget communicated via per-node state registry (#5).
-        # IS_CHANGED reads state to trigger re-execution on toggle;
-        # the signal carries active_state for downstream PBE nodes.
+        # NOTE: dazzle_state is a hidden input that the server never fills
+        # (only PROMPT/DYNPROMPT/EXTRA_PNGINFO/UNIQUE_ID/etc. get server
+        # values). Declaring it here is what lets the JS-injected prompt
+        # value pass ComfyUI's input filter (execution.py get_input_data
+        # drops constants whose key has no INPUT_TYPES category) and reach
+        # execute(). It also puts the state into the cache key, replacing
+        # IS_CHANGED.
         return {
             "required": {
                 "pause_seed": (list(SEED_OPTIONS.keys()), {
@@ -145,59 +118,17 @@ class DazzleCommandNode:
             },
             "optional": {},
             "hidden": {
-                "unique_id": "UNIQUE_ID",
+                "dazzle_state": "DAZZLE_STATE",
             },
         }
 
-    @classmethod
-    def IS_CHANGED(cls, **kwargs):
-        # IS_CHANGED runs for ALL nodes BEFORE any execute(). We build
-        # the signal dict here so PBE can read gate config even if PBE
-        # executes before DazzleCommand (no noodle dependency after
-        # JS strips dazzle_signal from PBE's prompt inputs).
-        import sys
-        unique_id = kwargs.get('unique_id', '')
-        dc_state = get_dc_state(unique_id)
-        state = dc_state.state
-        pause_seed = kwargs.get('pause_seed', 'one run then random')
-        pause_gate = kwargs.get('pause_gate', 'auto')
-        play_seed = kwargs.get('play_seed', 'reuse last seed')
-        play_gate = kwargs.get('play_gate', 'never block')
-
-        # Resolve intents based on state
-        if state == "playing":
-            seed_intent = SEED_OPTIONS.get(play_seed)
-            gate_intent = "open"
-            gate_mode = PLAY_GATE_OPTIONS.get(play_gate, "never")
-        else:
-            seed_intent = SEED_OPTIONS.get(pause_seed)
-            gate_intent = "block"
-            gate_mode = PAUSE_GATE_OPTIONS.get(pause_gate, "auto")
-
-        # Store in per-node state so PBE can read during its execute
-        dc_state.seed_intent = seed_intent
-        dc_state.gate_intent = gate_intent
-        dc_state.gate_mode = gate_mode
-        dc_state.signal = {
-            "active_state": state,
-            "pause_seed_intent": SEED_OPTIONS.get(pause_seed),
-            "pause_gate_intent": "block",
-            "pause_gate_mode": PAUSE_GATE_OPTIONS.get(pause_gate, "auto"),
-            "play_seed_intent": SEED_OPTIONS.get(play_seed),
-            "play_gate_intent": "open",
-            "play_gate_mode": PLAY_GATE_OPTIONS.get(play_gate, "never"),
-            "schema_version": 2,
-        }
-
-        return f"{state}|{pause_seed}|{pause_gate}|{play_seed}|{play_gate}"
-
     def execute(self, pause_seed="one run then random", pause_gate="auto",
                 play_seed="reuse last seed", play_gate="never block",
-                unique_id=""):
+                dazzle_state="paused"):
 
-        # Read active state from per-node registry (#5)
-        dc_state = get_dc_state(unique_id)
-        state = dc_state.state
+        # State arrives in the prompt itself (injected by JS at queue time).
+        # Missing/invalid (headless API prompts, API-format exports) -> paused.
+        state = dazzle_state if dazzle_state in ("playing", "paused") else "paused"
 
         # Resolve active intents based on state
         if state == "playing":
@@ -209,14 +140,8 @@ class DazzleCommandNode:
             gate_intent = "block"
             gate_mode = PAUSE_GATE_OPTIONS.get(pause_gate, "auto")
 
-        # Write resolved state to per-node registry (#5)
-        dc_state.seed_intent = seed_intent
-        dc_state.gate_intent = gate_intent
-        dc_state.gate_mode = gate_mode
-
-        # Signal dict with all configs. JS strips this from SmartResCalc and
-        # PBE prompt inputs to prevent cache cascade. Consumers read per-node
-        # state from sys._dazzle_command_states via _dazzle_dc_id marker.
+        # Signal dict with both configs plus the active state. PBE receives
+        # this via the noodle and picks the matching gate config.
         signal = {
             "active_state": state,
             "pause_seed_intent": SEED_OPTIONS.get(pause_seed),
@@ -227,14 +152,9 @@ class DazzleCommandNode:
             "play_gate_mode": PLAY_GATE_OPTIONS.get(play_gate, "never"),
             "schema_version": 2,
         }
-        dc_state.signal = signal
 
         logger.debug(f"DazzleCommand: state={state}, seed_intent={seed_intent}, "
-                      f"gate_intent={gate_intent}, gate_mode={gate_mode}")
+                     f"gate_intent={gate_intent}, gate_mode={gate_mode}")
         logger.debug(f"{state.upper()}: seed={seed_intent}, gate={gate_intent} ({gate_mode})")
 
-        last_seed = get_last_seed()
-        seed_display = str(last_seed) if last_seed is not None else "--"
-
-        return {"ui": {"text": [seed_display]},
-                "result": (signal,)}
+        return (signal,)

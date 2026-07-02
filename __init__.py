@@ -51,27 +51,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DazzleCommand": "Dazzle Command (DazzleNodes)",
 }
 
-# Register API endpoint for JS to set play/pause state per node (#5)
-# Uses per-node state registry instead of global singleton
-from .py.dazzle_command import get_dc_state
-try:
-    from aiohttp import web
-    import server
-
-    @server.PromptServer.instance.routes.post("/dazzle-command/set-state")
-    async def set_dazzle_command_state(request):
-        data = await request.json()
-        node_id = str(data.get('nodeId', data.get('node_id', 'default')))
-        state_value = data.get('state', 'paused')
-        # Write to per-node registry (#5)
-        dc_state = get_dc_state(node_id)
-        dc_state.state = state_value
-        _logger.debug(f"API: Node {node_id} state set to: {state_value}")
-        return web.json_response({"ok": True})
-
-    print(f"[DazzleCommand] Registered API endpoint: /dazzle-command/set-state (per-node #5)")
-except Exception as e:
-    print(f"[DazzleCommand] WARNING: Could not register API endpoint: {e}")
+# NOTE: There is intentionally no state API endpoint. Play/pause state is
+# JS-owned (node.properties, per workflow tab) and arrives per-prompt via
+# the hidden dazzle_state input injected at queue time. A server-side
+# registry keyed by node ID was cross-tab-shared (node IDs collide across
+# workflow tabs) and caused state contamination between open workflows.
 
 # Tell ComfyUI where to find our JavaScript files
 # Disabled on duplicate loads to prevent double JS extension registration

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7-alpha] - 2026-07-02
+
+### Fixed
+- **Cross-tab state contamination** -- opening a second workflow tab (even the same
+  file, even without running it) contaminated the first tab's play/pause state and
+  invalidated its cache. Node IDs collide across tabs, so every store keyed by bare
+  node ID was wrong: the JS `nodeStates` map, the `sys._dazzle_command_states`
+  registry, and the `/dazzle-command/set-state` API are all removed. State now lives
+  on each node object plus `node.properties` (persisted per workflow-tab draft), and
+  reaches Python per-queue via a JS-injected hidden `dazzle_state` prompt input
+  (which also serves as the cache key, replacing IS_CHANGED).
+- **Mid-session reconfigure state resets** -- runtime-first guard in onConfigure:
+  reconfigures replaying stale snapshots can no longer revert the user's Play/Pause
+  clicks (per-node-object replacement for the v0.2.5 workflow-UUID guard).
+- **Seed bar display adopted seeds from unconnected SmartResCalc nodes** -- the
+  "no noodle, accept any" fallback masked missing dazzle_signal connections as
+  working orchestration; display is now noodle-required (#56 spirit).
+- Seed bar values (display + user-entered seed) persist per tab via node.properties.
+
+### Companion versions
+- Pairs with [SmartResCalc v0.12.2](https://github.com/DazzleNodes/ComfyUI-Smart-Resolution-Calc)
+  (per-tab lastSeed persistence, seed intent override)
+
 ## [0.2.6-alpha] - 2026-03-31
 
 ### Added

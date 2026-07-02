@@ -2,8 +2,12 @@
  * DazzleCommand -- Workflow Orchestration Extension
  *
  * Play/pause buttons at the top of the node.
- * State is communicated to Python via API endpoint (not widget input)
- * to avoid ComfyUI cache invalidation.
+ * State lives on each node object (runtime) and in node.properties
+ * (persisted per workflow-tab draft). At queue time a prompt hook injects
+ * the live state into the node's prompt inputs (dazzle_state, a declared
+ * hidden input on the Python side). There is NO server-side state and NO
+ * API side-channel: node IDs collide across workflow tabs, so any shared
+ * store keyed by node ID gets contaminated the moment a second tab opens.
  *
  * COMPATIBILITY NOTE:
  * Uses dynamic imports with auto-depth detection to work in both:
@@ -35,72 +39,48 @@ const INFO_BG = "#1a1a1a";
 const BUTTON_RADIUS = 4;
 const MIN_NODE_WIDTH = 260;
 
-// Track state per node (JS-side, persisted via workflow save)
-const nodeStates = new Map();
-
-// Workflow identity tracking — detect new workflow vs mid-execution reconfigure.
-// When loadGraphData fires, we reset this so the next configure knows it's a fresh load.
-let _lastWorkflowId = null;
-let _workflowJustLoaded = false;
-
-// Resolved after dynamic import
-let _app = null;
-
-function _getWorkflowId() {
-    const id = _app?.graph?.extra?.id;
-    if (id) return id;
-    // Fallback for older workflows without UUID
-    const g = _app?.graph;
-    if (g) return `legacy-${g.last_node_id ?? 0}`;
-    return null;
+// Per-node state. node._dazzleCommandState is the runtime value (also read
+// by SmartResCalc's seed intercept); node.properties.dazzle_state is the
+// persisted copy that rides each workflow tab's draft, so it survives tab
+// switches and page reloads. Deliberately no module-level map and no API
+// call: those were shared across tabs and keyed by colliding node IDs.
+function getState(node) {
+    return node?._dazzleCommandState || "paused";
 }
 
-function getState(nodeId) {
-    return nodeStates.get(nodeId) || "paused";
-}
-
-// api reference set by IIFE after dynamic import
-let _api = null;
-
-async function setState(nodeId, state, node) {
-    nodeStates.set(nodeId, state);
-    // Store on node object so other extensions can read it
-    if (node) node._dazzleCommandState = state;
-    // Notify Python via API (writes to sys._dazzle_command_state)
-    try {
-        await _api.fetchApi("/dazzle-command/set-state", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ state, nodeId }),
-        });
-    } catch (e) {
-        logger.error("API call failed:", e);
-    }
+function setState(node, state) {
+    node._dazzleCommandState = state;
+    node.properties.dazzle_state = state;
 }
 
 // Initialize extension with dynamic imports
 (async () => {
     const { app, api } = await importComfyCore();
-    _api = api;
-    _app = app;
 
     app.registerExtension({
     name: "DazzleNodes.DazzleCommand",
 
     async setup() {
-        // Patch loadGraphData to detect new workflow loads vs reconfigures.
-        // When a new workflow loads, we clear nodeStates so onConfigure
-        // restores state from saved data. Mid-execution reconfigures
-        // preserve runtime state (user's play/pause clicks).
-        const origLoadGraphData = app.loadGraphData?.bind(app);
-        if (origLoadGraphData) {
-            app.loadGraphData = async function(graphData, ...args) {
-                _workflowJustLoaded = true;
-                _lastWorkflowId = null;
-                logger.debug("[Workflow] loadGraphData fired — will restore saved state on next configure");
-                return origLoadGraphData(graphData, ...args);
-            };
-        }
+        // Inject the live play/pause state into each DazzleCommand node's
+        // prompt inputs at queue time. dazzle_state is a declared hidden
+        // input on the Python side, so it reaches execute() AND enters the
+        // ComfyUI cache key — a toggle is exactly the change that should
+        // invalidate the node. This replaces both IS_CHANGED and the old
+        // /dazzle-command/set-state API side-channel: the queued prompt is
+        // self-contained, so state is per-queue and per-tab by construction.
+        const originalQueuePrompt = app.api.queuePrompt.bind(app.api);
+        app.api.queuePrompt = async function(index, prompt, ...args) {
+            const nodes = app.graph._nodes || [];
+            for (const n of nodes) {
+                if (n.comfyClass !== "DazzleCommand") continue;
+                const nodePrompt = prompt?.output?.[String(n.id)];
+                if (nodePrompt?.inputs) {
+                    nodePrompt.inputs.dazzle_state = getState(n);
+                    logger.debug(`[Queue] Node ${n.id}: injected dazzle_state='${getState(n)}'`);
+                }
+            }
+            return originalQueuePrompt(index, prompt, ...args);
+        };
     },
 
     async nodeCreated(node) {
@@ -131,7 +111,7 @@ async function setState(nodeId, state, node) {
                 const gap = 2;
                 const btnWidth = (usable - gap - resetSize - gap) / 2;
                 const btnY = y + 4;
-                const isPlaying = getState(node.id) === "playing";
+                const isPlaying = getState(node) === "playing";
 
                 ctx.save();
 
@@ -232,7 +212,7 @@ async function setState(nodeId, state, node) {
                     const a = this._playArea;
                     if (localX >= a.x && localX <= a.x + a.w &&
                         localY >= a.y && localY <= a.y + a.h) {
-                        setState(node.id, "playing", node);
+                        setState(node, "playing");
                         node.setDirtyCanvas(true);
                         return true;
                     }
@@ -254,6 +234,7 @@ async function setState(nodeId, state, node) {
                             // Cleared — return control to SmartResCalc
                             userEnteredSeed = null;
                             node._dazzleUserSeed = null;
+                            node.properties.dazzle_user_seed = null;
                             node.setDirtyCanvas(true);
                         } else {
                             const parsed = parseInt(result.trim());
@@ -261,7 +242,9 @@ async function setState(nodeId, state, node) {
                                 // User entered a seed — DazzleCommand drives
                                 userEnteredSeed = parsed;
                                 node._dazzleUserSeed = parsed;
+                                node.properties.dazzle_user_seed = parsed;
                                 lastSeedValue = String(parsed);
+                                node.properties.dazzle_seed_display = lastSeedValue;
                                 node.setDirtyCanvas(true);
                             }
                         }
@@ -273,7 +256,7 @@ async function setState(nodeId, state, node) {
                     const a = this._pauseArea;
                     if (localX >= a.x && localX <= a.x + a.w &&
                         localY >= a.y && localY <= a.y + a.h) {
-                        setState(node.id, "paused", node);
+                        setState(node, "paused");
                         node.setDirtyCanvas(true);
                         return true;
                     }
@@ -286,7 +269,7 @@ async function setState(nodeId, state, node) {
                         const allNodes = app.graph._nodes || [];
                         for (const n of allNodes) {
                             if (n.comfyClass === "DazzleCommand") {
-                                setState(n.id, "paused", n);
+                                setState(n, "paused");
                                 n.setDirtyCanvas(true);
                             }
                         }
@@ -302,48 +285,61 @@ async function setState(nodeId, state, node) {
             },
 
             serializeValue() {
-                // Save play/pause state in workflow
-                return getState(node.id);
+                // Save play/pause state in workflow (legacy slot — properties
+                // are the primary store; this keeps old-format restores alive)
+                return getState(node);
             },
         });
 
-        // Restore state from workflow load — but only on NEW workflow loads.
-        // Mid-execution reconfigures preserve runtime state (user's clicks).
+        // Restore state on configure. LiteGraph copies the serialized
+        // properties onto the node BEFORE onConfigure fires, so
+        // node.properties is already this tab's persisted truth. Because
+        // every store is per-node-object (no shared map, no server state),
+        // mid-execution reconfigures, tab switches, and same-file-twice
+        // tabs all restore their own values with nothing to contaminate.
         const origOnConfigure = node.onConfigure;
         node.onConfigure = function(config) {
             if (origOnConfigure) origOnConfigure.call(this, config);
 
-            const currentWfId = _getWorkflowId();
-            const isNewWorkflow = _workflowJustLoaded || currentWfId !== _lastWorkflowId;
+            // Runtime-first guard: if THIS node object already carries live
+            // state, this configure is a reconfigure replaying a snapshot
+            // (extensions like components-manager do this mid-session, and
+            // the snapshot may predate the user's last Play/Pause click —
+            // the v0.2.5 state-reset incident). The user's clicks outrank
+            // stored data: re-assert runtime state over whatever the
+            // snapshot restored into properties. Fresh node objects (real
+            // loads / tab switches) have no runtime state and fall through
+            // to the normal restore below.
+            const live = this._dazzleCommandState;
+            if (live === "playing" || live === "paused") {
+                this.properties.dazzle_state = live;
+                logger.debug(`[Configure] Node ${node.id}: reconfigure — preserved runtime state='${live}'`);
+                return;
+            }
 
-            if (isNewWorkflow) {
-                // New workflow — restore saved state
-                _lastWorkflowId = currentWfId;
-                _workflowJustLoaded = false;
-
+            // Play/pause: properties first, legacy widgets_values fallback
+            let state = this.properties?.dazzle_state;
+            if (state !== "playing" && state !== "paused") {
+                state = null;
                 const widgets = config?.widgets_values;
                 if (widgets) {
                     for (const v of widgets) {
                         if (v === "playing" || v === "paused") {
-                            nodeStates.set(node.id, v);
-                            const _node = node;
-                            const _state = v;
-                            setTimeout(() => {
-                                setState(_node.id, _state, _node);
-                            }, 100);
-                            logger.debug(`[Configure] Node ${node.id}: NEW workflow, restored state='${v}'`);
+                            state = v;
                             break;
                         }
                     }
                 }
-            } else {
-                // Same workflow reconfigure — preserve runtime state
-                const existing = nodeStates.get(node.id);
-                if (existing) {
-                    node._dazzleCommandState = existing;
-                    logger.debug(`[Configure] Node ${node.id}: SAME workflow, preserved state='${existing}'`);
-                }
             }
+            setState(node, state || "paused");
+
+            // Seed-bar: restore display + user-entered seed for this tab
+            const disp = this.properties?.dazzle_seed_display;
+            if (disp != null) lastSeedValue = String(disp);
+            const userSeed = this.properties?.dazzle_user_seed;
+            userEnteredSeed = (typeof userSeed === "number") ? userSeed : null;
+            node._dazzleUserSeed = userEnteredSeed;
+            logger.debug(`[Configure] Node ${node.id}: restored state='${getState(node)}', seedDisplay='${lastSeedValue}', userSeed=${userEnteredSeed}`);
         };
 
         // Move buttons to first widget position
@@ -375,13 +371,16 @@ async function setState(nodeId, state, node) {
                 if (srcNode.comfyClass !== 'SmartResolutionCalc') continue;
 
                 // Check if connected to this DazzleCommand
+                // Noodle-required (#56 spirit): only display seeds from a
+                // SmartResCalc whose dazzle_signal is wired to THIS node.
+                // The old "no noodle — accept any" fallback made unconnected
+                // DazzleCommands display seeds from nodes they don't control,
+                // which disguises missing noodles as working orchestration.
                 let isOurs = false;
                 const signalInput = srcNode.inputs?.find(i => i.name === 'dazzle_signal');
                 if (signalInput?.link) {
                     const link = app.graph.links[signalInput.link];
                     if (link && link.origin_id === node.id) isOurs = true;
-                } else {
-                    isOurs = true; // No noodle — accept any
                 }
 
                 if (isOurs) {
@@ -389,10 +388,12 @@ async function setState(nodeId, state, node) {
                     logger.debug(`status event: SmartResCalc node ${srcNode.id}, seedWidget=${!!seedWidget}, lastSeed=${seedWidget?.lastSeed}`);
                     if (seedWidget?.lastSeed != null) {
                         lastSeedValue = String(seedWidget.lastSeed);
+                        node.properties.dazzle_seed_display = lastSeedValue;
                         // Sync userEnteredSeed with node property
                         // (cleared by SmartResCalc JS after transient use)
                         if (node._dazzleUserSeed === null && userEnteredSeed !== null) {
                             userEnteredSeed = null;
+                            node.properties.dazzle_user_seed = null;
                             logger.debug('Transient seed cleared by SmartResCalc, returning to display mode');
                         }
                         node.setDirtyCanvas(true);
@@ -401,13 +402,6 @@ async function setState(nodeId, state, node) {
                 }
             }
         });
-
-        // Initialize Python-side state — defer until node ID is assigned (#5)
-        const _initNode = node;
-        setTimeout(() => {
-            const savedState = nodeStates.get(_initNode.id) || "paused";
-            setState(_initNode.id, savedState, _initNode);
-        }, 150);
 
         node.setSize(node.computeSize());
     },
